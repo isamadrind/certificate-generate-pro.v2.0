@@ -107,4 +107,8 @@ A: Duplicate the `generate_certificate()` text block with different x/y coordina
 
 ## 📞 Support
 Developed by: **Abdul Samad**  
+LikedIn: Abdul Samad Rind
+TikTok: isamadrind
+Instagram: isamad.rind
+FaceBook: Abdul Samad
 University: Shaheed Benazir Bhutto University Nawabshah
