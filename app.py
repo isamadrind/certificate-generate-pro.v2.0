@@ -242,19 +242,30 @@ def build_excel_report(event_info: dict, log: list) -> bytes:
 
     # ── Sheet 2: Certificate Log ─────────────────────────────────
     ws2 = wb.create_sheet("Certificate Log")
-    for ci, h in enumerate(["#","Name","Category","Event","Date","Time"], 1):
+    headers2 = ["#","Full Name","Department","Batch","Roll No","Category","Event","Date","Day","Time"]
+    for ci, h in enumerate(headers2, 1):
         cell = ws2.cell(row=1, column=ci, value=h)
         cell.font = hfnt; cell.fill = hfil
         cell.alignment = Alignment(horizontal="center")
     for ri, rec in enumerate(log, 2):
-        row_data = [ri-1, rec.get("name",""), rec.get("category",""),
-                    rec.get("event",""), rec.get("date",""), rec.get("time","")]
+        row_data = [
+            ri-1,
+            rec.get("name",""),
+            rec.get("department",""),
+            rec.get("batch",""),
+            rec.get("roll_no",""),
+            rec.get("category",""),
+            rec.get("event",""),
+            rec.get("date",""),
+            rec.get("day",""),
+            rec.get("time",""),
+        ]
         for ci, val in enumerate(row_data, 1):
             c2 = ws2.cell(row=ri, column=ci, value=val)
             c2.font = Font(color="E0E0E0")
             c2.fill = PatternFill("solid", fgColor="0F1B35" if ri%2==0 else "1E1B4B")
             c2.alignment = Alignment(horizontal="center" if ci==1 else "left")
-    for ci, w in enumerate([6,30,15,30,14,10], 1):
+    for ci, w in enumerate([5,28,22,16,14,15,30,13,12,10], 1):
         ws2.column_dimensions[get_column_letter(ci)].width = w
 
     # ── Sheet 3: Category Summary ────────────────────────────────
@@ -269,7 +280,13 @@ def build_excel_report(event_info: dict, log: list) -> bytes:
     for ri, (cat, names) in enumerate(categories.items(), 2):
         ws3[f"A{ri}"] = cat;           ws3[f"A{ri}"].font = Font(bold=True, color="FFD159")
         ws3[f"B{ri}"] = len(names);    ws3[f"B{ri}"].font = Font(color="E0E0E0")
-        ws3[f"C{ri}"] = ", ".join(names); ws3[f"C{ri}"].font = Font(color="E0E0E0")
+        # Build detailed name list with roll no
+        detail_list = []
+        for rec in log:
+            if rec.get("category","") == cat:
+                detail_list.append(f"{rec['name']} ({rec.get('roll_no','')})")
+        display = ", ".join(detail_list) if detail_list else ", ".join(names)
+        ws3[f"C{ri}"] = display; ws3[f"C{ri}"].font = Font(color="E0E0E0")
         for col in "ABC":
             ws3[f"{col}{ri}"].fill = hfil
     for col, w in [("A",20),("B",10),("C",70)]:
@@ -315,27 +332,36 @@ if page == "cert":
     with col:
         st.markdown('<div class="card">', unsafe_allow_html=True)
 
-        category = st.selectbox(
-            "Aap kaun hain? / Your Category:",
-            cat_opt,
-            help="Apni category choose karein"
-        )
-        st.markdown("---")
-        name_input = st.text_input(
-            "✏️ Apna Poora Naam Likhein / Enter Your Full Name:",
-            placeholder="e.g. Muhammad Ali Khan",
-            key="s_name"
-        )
+        category     = st.selectbox("🏷️ Category", cat_opt)
+        name_input   = st.text_input("👤 Poora Naam / Full Name *",
+                                     placeholder="e.g. Muhammad Ali Khan")
+        dept_input   = st.text_input("🏫 Department *",
+                                     placeholder="e.g. Computer Science")
+        batch_input  = st.text_input("📅 Batch / Year *",
+                                     placeholder="e.g. 2022-2026  or  Batch-7")
+        rollno_input = st.text_input("🔢 Roll No *",
+                                     placeholder="e.g. CS-2022-45")
 
+        st.markdown("---")
         generate_clicked = st.button(
-            "🎓 Mera Certificate Banao / Generate My Certificate",
+            "🎓 Certificate Generate Karein",
             use_container_width=True
         )
 
         if generate_clicked:
-            name_clean = name_input.strip()
-            if not name_clean:
-                st.error("❌ Kripya apna naam likhein!")
+            name_clean   = name_input.strip()
+            dept_clean   = dept_input.strip()
+            batch_clean  = batch_input.strip()
+            rollno_clean = rollno_input.strip()
+
+            missing = []
+            if not name_clean:   missing.append("Naam")
+            if not dept_clean:   missing.append("Department")
+            if not batch_clean:  missing.append("Batch")
+            if not rollno_clean: missing.append("Roll No")
+
+            if missing:
+                st.error("❌ Yeh fields zaroori hain: " + ", ".join(missing))
             else:
                 with st.spinner("🎨 Aapka certificate ban raha hai..."):
                     c_cfg = {"text_x":tx,"text_y":ty,"font_size":fs,
@@ -344,23 +370,26 @@ if page == "cert":
                         name_clean, st.session_state.template_bytes, c_cfg)
                     pdf = png_to_pdf(png, name_clean)
 
-                    # Auto-register in list
+                    now = datetime.now()
                     reg = st.session_state.registered
                     if category not in reg:
                         reg[category] = []
                     if name_clean not in reg[category]:
                         reg[category].append(name_clean)
 
-                    # Log entry
                     st.session_state.cert_log.append({
-                        "name":     name_clean,
-                        "category": category,
-                        "event":    event,
-                        "date":     datetime.now().strftime("%Y-%m-%d"),
-                        "time":     datetime.now().strftime("%H:%M:%S"),
+                        "name":       name_clean,
+                        "department": dept_clean,
+                        "batch":      batch_clean,
+                        "roll_no":    rollno_clean,
+                        "category":   category,
+                        "event":      event,
+                        "date":       now.strftime("%Y-%m-%d"),
+                        "day":        now.strftime("%A"),
+                        "time":       now.strftime("%H:%M:%S"),
                     })
 
-                st.success(f"✅ Certificate tayar hai! — **{name_clean}**")
+                st.success(f"✅ Certificate tayar hai — **{name_clean}**!")
                 st.image(png, use_container_width=True)
 
                 c1, c2 = st.columns(2)
@@ -737,7 +766,16 @@ with tab4:
     st.markdown("#### 📋 Live Registration Log (QR Scan se aaye names)")
 
     if log:
-        st.dataframe(log, use_container_width=True)
+        # Show as formatted table with friendly column names
+        import pandas as pd
+        df = pd.DataFrame(log)
+        col_rename = {
+            "name":"Full Name","department":"Department","batch":"Batch",
+            "roll_no":"Roll No","category":"Category","event":"Event",
+            "date":"Date","day":"Day","time":"Time"
+        }
+        df = df.rename(columns={k:v for k,v in col_rename.items() if k in df.columns})
+        st.dataframe(df, use_container_width=True)
 
         c1, c2, c3 = st.columns(3)
         with c1:
